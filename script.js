@@ -1,7 +1,7 @@
 "use strict";
 
 const TARGET_FPS = 30;
-const GAME_VERSION = "v0.0.1 (pzpl.ovh)";
+const GAME_VERSION = "v0.1 (pzpl.ovh)";
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
 const wireframe = false;
@@ -90,31 +90,46 @@ let drawOutline = () => {
 }
 
 let leiJun = new Image();
+let evoxJoey = {
+	image: new Image(),
+	alive: true,
+	active: false,
+	X: -180,
+	change: 1,
+	health: 120,
+	shooting: false
+};
 let bullet = new Image();
 let sg = new Image();
 let playerBullet = new Image();
-let evoxJoey = new Image();
+let evoxBullet = new Image();
 
-document.querySelector("#tps").textContent = TARGET_FPS;
+document.querySelector("#tps").innerText = TARGET_FPS;
 document.querySelector("#gameVersion").textContent = GAME_VERSION;
 
 function load() {
 	ctx.font = "40px sans-serif";
 	ctx.fillText("Loading...", 10, 50);
 	let loaded = 0;
+
 	function markAsLoaded() {
 		loaded++;
 	}
+
 	leiJun.onload = markAsLoaded;
 	bullet.onload = markAsLoaded;
 	sg.onload = markAsLoaded;
 	playerBullet.onload = markAsLoaded;
+	evoxJoey.image.onload = markAsLoaded;
+	evoxBullet.onload = markAsLoaded;
 	leiJun.src = "./assets/leijun.png";
+	evoxJoey.image.src = "./assets/joeyhuab.png";
 	bullet.src = "./assets/weapons/memeui.png";
 	sg.src = "./assets/sg.png";
 	playerBullet.src = "./assets/weapons/PE.png";
+	evoxBullet.src = "./assets/weapons/EvoBanner.webp";
 	let waitForLoaded = setInterval(function () {
-		if (loaded === 4) {
+		if (loaded === 6) {
 			clearInterval(waitForLoaded);
 			start();
 		}
@@ -122,8 +137,9 @@ function load() {
 }
 
 function start() {
-	function gameOver(tick) {
+	function gameOver(tick, regenTick) {
 		clearInterval(tick);
+		clearInterval(regenTick);
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		let gameOver = new Image();
 		gameOver.onload = function () {
@@ -147,9 +163,22 @@ function start() {
 		ctx.fillRect(sgX + 35, 130, 50, 5);
 		ctx.fillStyle = "red";
 		ctx.fillRect(sgX + 35, 130, Math.floor(sgHealth), 5);
+
+		ctx.fillStyle = "grey";
+		ctx.fillRect(evoxJoey.X + 20, 420, 120, 5);
+		ctx.fillStyle = "red";
+		ctx.fillRect(evoxJoey.X + 20, 420, Math.floor(evoxJoey.health), 5);
 	}
 
 	document.querySelector("button").style.display = "none";
+
+	// Reset Joey Huab
+	evoxJoey.alive = true;
+	evoxJoey.active = false;
+	evoxJoey.X = -180;
+	evoxJoey.change = 1;
+	evoxJoey.health = 120;
+	evoxJoey.shooting = false;
 
 	onkeydown = function (e) {
 		if (e.key === "ArrowRight") {
@@ -167,6 +196,19 @@ function start() {
 
 	let bulletRenderQueue = [];
 
+	evoxJoey.interval = setInterval(function () {
+		evoxJoey.active = true;
+	}, 10000);
+
+	let regenerationTick = setInterval(function () {
+		if (leiHealth < 100) {
+			leiHealth++;
+		}
+		if (sgHealth < 100) {
+			sgHealth++;
+		}
+	}, 1000);
+
 	let gameTick = setInterval(function () {
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -176,9 +218,33 @@ function start() {
 
 		ctx.drawImage(leiJun, leiX, 600 - leiJun.height);
 		ctx.drawImage(sg, sgX, 0, 128, 128);
+
+		if (evoxJoey.active && evoxJoey.alive) {
+			ctx.drawImage(evoxJoey.image, evoxJoey.X, 420, 180, 180);
+			evoxJoey.X += evoxJoey.change;
+
+			if (!evoxJoey.shooting && evoxJoey.X > 10 && Math.random() > .95) {
+				evoxJoey.shooting = true;
+				bulletRenderQueue.push({
+					X: evoxJoey.X,
+					Y: 420,
+					bullet: evoxBullet,
+					width: evoxBullet.width,
+					height: evoxBullet.height,
+					bulletID: 2,
+					baseHealthDamage: 15
+				});
+			}
+		}
+
 		leiX += leiChange;
 		if (leiX > (canvas.width - leiJun.width) || leiX < 0) {
 			leiChange *= -1;
+		}
+
+		if (evoxJoey.X > canvas.width) {
+			evoxJoey.X = -180;
+			evoxJoey.active = false;
 		}
 
 		renderHealth();
@@ -191,7 +257,8 @@ function start() {
 				bullet: bullet,
 				width: 20,
 				height: 80,
-				miuiBullet: true
+				bulletID: 1,
+				baseHealthDamage: 5
 			});
 		}
 
@@ -203,7 +270,8 @@ function start() {
 					bullet: playerBullet,
 					width: playerBullet.width,
 					height: playerBullet.height,
-					miuiBullet: false
+					bulletID: 0,
+					baseHealthDamage: 5
 				});
 				playerCanShoot = false;
 				setTimeout(() => {
@@ -213,19 +281,31 @@ function start() {
 		}
 
 		bulletRenderQueue.forEach((bullet) => {
-			if (bullet.miuiBullet && !noDamage && intersects(bullet.X, bullet.Y, bullet.width, bullet.height, sgX, 0, 128, 128)) {
-				sgHealth -= 5 + Math.floor(Math.random() * 10);
+			if ((bullet.bulletID === 1 || bullet.bulletID === 2) && !noDamage && intersects(bullet.X, bullet.Y, bullet.width, bullet.height, sgX, 0, 128, 128)) {
+				sgHealth -= bullet.baseHealthDamage + Math.floor(Math.random() * 10);
 				bulletRenderQueue = bulletRenderQueue.filter(item => item !== bullet);
-				miuiBullets--;
+				if (bullet.bulletID === 1) {
+					miuiBullets--;
+				}
 				if (sgHealth < 1) {
-					gameOver(gameTick);
+					gameOver(gameTick, regenerationTick);
 				}
 			}
 
-			if (!bullet.miuiBullet && !noDamage && intersects(bullet.X, bullet.Y, bullet.width, bullet.height, leiX, 600 - leiJun.height, leiJun.width, leiJun.height)) {
-				leiHealth -= 5 + Math.floor(Math.random() * 10);
+			if (bullet.bulletID === 0 && !noDamage && intersects(bullet.X, bullet.Y, bullet.width, bullet.height, evoxJoey.X,  420, 180, 180)) {
+				console.log("SRAM!");
+				evoxJoey.health -= bullet.baseHealthDamage + Math.floor(Math.random() * 16);
+				if (evoxJoey.health < 1) {
+					evoxJoey.alive = false;
+				}
+				bulletRenderQueue = bulletRenderQueue.filter(item => item !== bullet);
+			}
+
+			if (bullet.bulletID === 0 && !noDamage && intersects(bullet.X, bullet.Y, bullet.width, bullet.height, leiX, 600 - leiJun.height, leiJun.width, leiJun.height)) {
+				leiHealth -= bullet.baseHealthDamage + Math.floor(Math.random() * 10);
 				if (leiHealth < 1) {
 					clearInterval(gameTick);
+					clearInterval(regenerationTick);
 					ctx.clearRect(0, 0, canvas.width, canvas.height);
 					ctx.font = "40px sans-serif";
 					ctx.fillText("You won.", 10, 50);
@@ -235,38 +315,30 @@ function start() {
 				bulletRenderQueue = bulletRenderQueue.filter(item => item !== bullet);
 				if (collisionHitbox) {
 					clearInterval(gameTick);
+					clearInterval(regenerationTick);
 					ctx.fillRect(bullet.X, bullet.Y, playerBullet.width, playerBullet.height);
 					ctx.fillRect(leiX, 600 - leiJun.height, leiJun.width, leiJun.height);
 				}
 			}
 
-			if (bullet.miuiBullet) {
+			if (bullet.bulletID === 1 || bullet.bulletID === 2) {
 				bullet.Y -= 7;
 			} else {
 				bullet.Y += 7;
 			}
 			ctx.drawImage(bullet.bullet, bullet.X, bullet.Y, bullet.width, bullet.height);
 
-			if (bullet.miuiBullet && bullet.Y < -10) {
+			if (bullet.bulletID === 1 && bullet.Y < -10) {
 				bulletRenderQueue = bulletRenderQueue.filter(item => item !== bullet);
 				miuiBullets--;
 			}
 
-			if (!bullet.miuiBullet && bullet.Y > 600) {
+			if (bullet.bulletID === 0 && bullet.Y > 600) {
 				bulletRenderQueue = bulletRenderQueue.filter(item => item !== playerBullet);
 			}
 		});
 	}, 1000 / TARGET_FPS);
 	console.log("started gameTick");
-
-	setInterval(function() {
-		if (leiHealth !== 100) {
-			leiHealth++;
-		}
-		if (sgHealth !== 100) {
-			leiHealth += .5;
-		}
-	}, 1000);
 
 	if (wireframe) {
 		setInterval(drawOutline, 1000 / TARGET_FPS);
