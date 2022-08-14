@@ -1,7 +1,7 @@
 "use strict";
 
 const TARGET_FPS = 30;
-const GAME_VERSION = "v0.1 (pzpl.ovh)";
+const GAME_VERSION = "v0.1.1 (pzpl.ovh)";
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
 const wireframe = false;
